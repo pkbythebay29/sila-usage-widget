@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An offline SiLA 2 learning simulator for a 6-axis robot and motorized lift.">
+  <title>SiLA Robot Lab</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #10202b;
+      --muted: #64717b;
+      --line: #dbe2e7;
+      --surface: #ffffff;
+      --canvas: #f1f5f4;
+      --accent: #136f63;
+      --accent-dark: #0b5149;
+      --accent-soft: #dff3ee;
+      --blue: #275d8c;
+      --blue-soft: #e8f1f8;
+      --warn: #9a5b0b;
+      --warn-soft: #fff2d9;
+      --danger: #a73b3b;
+      --danger-soft: #fbe8e8;
+      --shadow: 0 18px 50px rgba(27, 49, 57, 0.09);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { touch-action: manipulation; }
+
+    .shell {
+      width: min(1240px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(219, 226, 231, 0.88);
+      background: rgba(241, 245, 244, 0.92);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--ink);
+      color: white;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .brand strong, .brand span { display: block; }
+    .brand strong { font-size: 16px; letter-spacing: -0.01em; }
+    .brand span { color: var(--muted); font-size: 12px; }
+
+    .connection {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent-dark);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .connection::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #2eb67d;
+      box-shadow: 0 0 0 4px rgba(46, 182, 125, 0.15);
+    }
+
+    main { padding: 34px 0 48px; }
+
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: 1.02;
+      letter-spacing: -0.055em;
+    }
+
+    .lede {
+      max-width: 690px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .education-note {
+      max-width: 250px;
+      padding: 12px 14px;
+      border: 1px solid #c8ddd8;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.8fr);
+      gap: 18px;
+    }
+
+    .stack { display: grid; gap: 18px; }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .card-head h2 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status-pill[data-state="moving"] { background: var(--blue-soft); color: var(--blue); }
+    .status-pill[data-state="blocked"] { background: var(--danger-soft); color: var(--danger); }
+
+    .cell-stage {
+      position: relative;
+      min-height: 390px;
+      background:
+        linear-gradient(rgba(39, 93, 140, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(39, 93, 140, 0.05) 1px, transparent 1px),
+        #f8faf9;
+      background-size: 28px 28px;
+    }
+
+    .cell-stage svg {
+      display: block;
+      width: 100%;
+      height: 390px;
+    }
+
+    .zone-label {
+      fill: #718089;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+    }
+
+    .arm-link {
+      stroke: #173744;
+      stroke-width: 18;
+      stroke-linecap: round;
+    }
+
+    .arm-core {
+      stroke: #2f7d73;
+      stroke-width: 8;
+      stroke-linecap: round;
+    }
+
+    .joint { fill: #f8faf9; stroke: #173744; stroke-width: 7; }
+    .joint-core { fill: #2eb67d; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line);
+    }
+
+    .metric {
+      padding: 15px 18px;
+      border-right: 1px solid var(--line);
+    }
+
+    .metric:last-child { border-right: 0; }
+    .metric span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .metric strong { display: block; margin-top: 4px; font-size: 17px; }
+
+    .panel-body { padding: 18px 20px 20px; }
+
+    .field-label {
+      display: block;
+      margin-bottom: 9px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .pose-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .control-button {
+      min-height: 43px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: white;
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 750;
+      transition: 160ms ease;
+    }
+
+    .control-button:hover:not(:disabled) { border-color: #9bb1bb; transform: translateY(-1px); }
+    .control-button:focus-visible, .primary:focus-visible, .stop:focus-visible, input:focus-visible { outline: 3px solid rgba(39, 93, 140, 0.25); outline-offset: 2px; }
+    .control-button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+    .range-row { margin-top: 20px; }
+
+    .range-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-weight: 750;
+    }
+
+    .range-meta output { color: var(--accent); }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .range-scale {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .switches {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .switch-copy strong, .switch-copy span { display: block; }
+    .switch-copy strong { font-size: 13px; }
+    .switch-copy span { color: var(--muted); font-size: 11px; }
+
+    .switch {
+      position: relative;
+      width: 46px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+
+    .switch input { position: absolute; opacity: 0; pointer-events: none; }
+
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: #c8d0d5;
+      cursor: pointer;
+      transition: 160ms ease;
+    }
+
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 2px 5px rgba(16, 32, 43, 0.18);
+      transition: 160ms ease;
+    }
+
+    .switch input:checked + .switch-track { background: var(--accent); }
+    .switch input:checked + .switch-track::after { transform: translateX(20px); }
+    .switch input:focus-visible + .switch-track { outline: 3px solid rgba(39, 93, 140, 0.25); outline-offset: 2px; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .primary, .stop {
+      min-height: 46px;
+      border: 0;
+      border-radius: 11px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .primary { padding: 0 16px; background: var(--ink); color: white; }
+    .primary:hover:not(:disabled) { background: #203a48; }
+    .stop { width: 48px; background: var(--danger-soft); color: var(--danger); }
+
+    .log-card { grid-column: 1 / -1; }
+
+    .log-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .quiet-button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .event-log {
+      min-height: 164px;
+      max-height: 250px;
+      overflow: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .event {
+      display: grid;
+      grid-template-columns: 70px 78px minmax(0, 1fr);
+      gap: 12px;
+      align-items: baseline;
+      padding: 11px 20px;
+      border-bottom: 1px solid #edf0f2;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    .event:last-child { border-bottom: 0; }
+    .event time { color: #88949c; }
+
+    .event-type {
+      width: max-content;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .event[data-kind="property"] .event-type { background: var(--accent-soft); color: var(--accent-dark); }
+    .event[data-kind="safety"] .event-type { background: var(--warn-soft); color: var(--warn); }
+    .event[data-kind="error"] .event-type { background: var(--danger-soft); color: var(--danger); }
+
+    .learn {
+      margin-top: 18px;
+      padding: 22px 24px;
+      border-radius: var(--radius);
+      background: var(--ink);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    .learn h2 { margin: 0 0 16px; font-size: 17px; }
+
+    .concepts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .concept { padding-left: 15px; border-left: 2px solid rgba(255, 255, 255, 0.2); }
+    .concept strong { display: block; margin-bottom: 4px; color: #8ee0cc; }
+    .concept p { margin: 0; color: #c5d1d6; font-size: 13px; }
+
+    footer {
+      padding: 0 0 38px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+    }
+
+    @media (max-width: 880px) {
+      .intro { grid-template-columns: 1fr; }
+      .education-note { max-width: none; }
+      .dashboard { grid-template-columns: 1fr; }
+      .log-card { grid-column: auto; }
+      .concepts { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 20px, 1240px); }
+      .topbar { min-height: 64px; }
+      .brand span { display: none; }
+      main { padding-top: 24px; }
+      .cell-stage, .cell-stage svg { min-height: 315px; height: 315px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .metric:nth-child(2) { border-right: 0; }
+      .metric:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+      .event { grid-template-columns: 58px 68px minmax(0, 1fr); gap: 7px; padding-inline: 12px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">S2</div>
+        <div>
+          <strong>SiLA Robot Lab</strong>
+          <span>Robot and lift learning simulator</span>
+        </div>
+      </div>
+      <div class="connection">Simulation ready</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">SiLA 2 fundamentals</p>
+        <h1 id="page-title">See how SiLA fits above robot control</h1>
+        <p class="lede">Send high-level commands, watch properties change, and test safety interlocks. The robot controller and drive still own real-time motion.</p>
+      </div>
+      <div class="education-note">Offline educational simulation. It does not connect to physical equipment.</div>
+    </section>
+
+    <div class="dashboard">
+      <div class="stack">
+        <section class="card" aria-labelledby="cell-heading">
+          <div class="card-head">
+            <h2 id="cell-heading">Robot cell</h2>
+            <div class="status-pill" id="status-pill" data-state="ready"><span id="status-text">Ready</span></div>
+          </div>
+          <div class="cell-stage">
+            <svg viewBox="0 0 560 390" role="img" aria-labelledby="cell-title cell-desc">
+              <title id="cell-title">Simulated robot and lift cell</title>
+              <desc id="cell-desc">A six-axis robot arm moves between four poses beside a vertical lift.</desc>
+              <rect x="25" y="306" width="510" height="10" rx="5" fill="#cad5d8"/>
+              <rect x="62" y="279" width="115" height="28" rx="7" fill="#173744"/>
+              <text x="120" y="334" text-anchor="middle" class="zone-label">ROBOT BASE</text>
+              <rect x="404" y="66" width="88" height="240" rx="13" fill="#e3eaec" stroke="#b8c7cc"/>
+              <line x1="448" y1="84" x2="448" y2="290" stroke="#9fb1b7" stroke-width="5" stroke-linecap="round"/>
+              <rect id="lift-platform" x="389" y="250" width="118" height="18" rx="6" fill="#275d8c"/>
+              <rect id="lift-load" x="420" y="226" width="56" height="24" rx="5" fill="#f2b84b"/>
+              <text x="448" y="334" text-anchor="middle" class="zone-label">LIFT AXIS</text>
+              <line id="link-1" class="arm-link" x1="120" y1="279" x2="185" y2="220"/>
+              <line id="link-1-core" class="arm-core" x1="120" y1="279" x2="185" y2="220"/>
+              <line id="link-2" class="arm-link" x1="185" y1="220" x2="250" y2="190"/>
+              <line id="link-2-core" class="arm-core" x1="185" y1="220" x2="250" y2="190"/>
+              <line id="link-3" class="arm-link" x1="250" y1="190" x2="305" y2="205"/>
+              <line id="link-3-core" class="arm-core" x1="250" y1="190" x2="305" y2="205"/>
+              <circle class="joint" id="joint-1" cx="120" cy="279" r="18"/>
+              <circle class="joint-core" id="joint-1-core" cx="120" cy="279" r="6"/>
+              <circle class="joint" id="joint-2" cx="185" cy="220" r="16"/>
+              <circle class="joint-core" id="joint-2-core" cx="185" cy="220" r="5"/>
+              <circle class="joint" id="joint-3" cx="250" cy="190" r="14"/>
+              <circle class="joint-core" id="joint-3-core" cx="250" cy="190" r="5"/>
+              <g id="gripper">
+                <circle cx="305" cy="205" r="11" fill="#173744"/>
+                <line x1="312" y1="200" x2="329" y2="193" stroke="#173744" stroke-width="6" stroke-linecap="round"/>
+                <line x1="312" y1="210" x2="329" y2="217" stroke="#173744" stroke-width="6" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="metrics" aria-label="Live properties">
+            <div class="metric"><span>Pose</span><strong id="pose-value">Home</strong></div>
+            <div class="metric"><span>Lift</span><strong id="lift-value">40 mm</strong></div>
+            <div class="metric"><span>Robot</span><strong id="robot-state">Idle</strong></div>
+            <div class="metric"><span>Safety</span><strong id="safety-value">Ready</strong></div>
+          </div>
+        </section>
+
+        <section class="card log-card" aria-labelledby="log-heading">
+          <div class="card-head">
+            <h2 id="log-heading">SiLA activity</h2>
+            <div class="log-toolbar">
+              <button class="quiet-button" id="clear-log" type="button">Clear log</button>
+            </div>
+          </div>
+          <ol class="event-log" id="event-log" aria-live="polite"></ol>
+        </section>
+      </div>
+
+      <aside class="card" aria-labelledby="controls-heading">
+        <div class="card-head"><h2 id="controls-heading">Controls</h2></div>
+        <div class="panel-body">
+          <span class="field-label">Robot pose command</span>
+          <div class="pose-grid" id="pose-grid">
+            <button class="control-button active" type="button" data-pose="home">Home</button>
+            <button class="control-button" type="button" data-pose="pick">Pick</button>
+            <button class="control-button" type="button" data-pose="inspect">Inspect</button>
+            <button class="control-button" type="button" data-pose="place">Place</button>
+          </div>
+
+          <div class="range-row">
+            <div class="range-meta">
+              <label for="lift-range">Lift target</label>
+              <output id="lift-output" for="lift-range">40 mm</output>
+            </div>
+            <input id="lift-range" type="range" min="0" max="400" step="10" value="40">
+            <div class="range-scale"><span>0 mm</span><span>400 mm</span></div>
+            <button class="control-button" id="move-lift" type="button" style="width:100%; margin-top:10px;">Move lift to target</button>
+          </div>
+
+          <div class="switches" aria-label="Safety interlocks">
+            <div class="switch-row">
+              <div class="switch-copy"><strong>Guard closed</strong><span>Required for movement</span></div>
+              <label class="switch">
+                <input id="guard-switch" type="checkbox" checked>
+                <span class="switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="switch-row">
+              <div class="switch-copy"><strong>Drive enabled</strong><span>Simulated servo state</span></div>
+              <label class="switch">
+                <input id="drive-switch" type="checkbox" checked>
+                <span class="switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="run-workflow" type="button">Run guided workflow</button>
+            <button class="stop" id="stop-motion" type="button" aria-label="Stop motion" title="Stop motion">■</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="learn" aria-labelledby="learn-heading">
+      <h2 id="learn-heading">What this demonstrates</h2>
+      <div class="concepts">
+        <div class="concept"><strong>Command</strong><p>A SiLA client requests a goal such as MoveToPose or SetLiftHeight. It does not stream motor setpoints.</p></div>
+        <div class="concept"><strong>Property</strong><p>The server reports values such as EquipmentState, CurrentPose, and LiftPosition.</p></div>
+        <div class="concept"><strong>Controller boundary</strong><p>The robot controller, drive, PLC, and safety system remain responsible for deterministic motion and interlocks.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="shell">Built as a local learning tool. No data is collected or transmitted.</footer>
+
+  <script>
+    const poses = {
+      home: { label: "Home", joints: [0, -18, 58, 0, 42, 0], lift: 40 },
+      pick: { label: "Pick", joints: [-32, 34, 62, -8, 55, -16], lift: 70 },
+      inspect: { label: "Inspect", joints: [24, 5, 34, 42, 28, 22], lift: 220 },
+      place: { label: "Place", joints: [48, 26, 48, 0, 58, 16], lift: 330 }
+    };
+
+    const state = {
+      pose: "home",
+      joints: [...poses.home.joints],
+      lift: poses.home.lift,
+      moving: false,
+      runId: 0
+    };
+
+    const elements = {
+      statusPill: document.querySelector("#status-pill"),
+      statusText: document.querySelector("#status-text"),
+      poseValue: document.querySelector("#pose-value"),
+      liftValue: document.querySelector("#lift-value"),
+      robotState: document.querySelector("#robot-state"),
+      safetyValue: document.querySelector("#safety-value"),
+      liftOutput: document.querySelector("#lift-output"),
+      liftRange: document.querySelector("#lift-range"),
+      guard: document.querySelector("#guard-switch"),
+      drive: document.querySelector("#drive-switch"),
+      poseButtons: [...document.querySelectorAll("[data-pose]")],
+      moveLift: document.querySelector("#move-lift"),
+      runWorkflow: document.querySelector("#run-workflow"),
+      stop: document.querySelector("#stop-motion"),
+      log: document.querySelector("#event-log"),
+      liftPlatform: document.querySelector("#lift-platform"),
+      liftLoad: document.querySelector("#lift-load")
+    };
+
+    const svgParts = {
+      links: [1, 2, 3].map(number => ({
+        outer: document.querySelector(`#link-${number}`),
+        core: document.querySelector(`#link-${number}-core`)
+      })),
+      joints: [1, 2, 3].map(number => ({
+        outer: document.querySelector(`#joint-${number}`),
+        core: document.querySelector(`#joint-${number}-core`)
+      })),
+      gripper: document.querySelector("#gripper")
+    };
+
+    function timestamp() {
+      return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    function addLog(kind, message) {
+      const item = document.createElement("li");
+      item.className = "event";
+      item.dataset.kind = kind;
+      const label = kind === "error" ? "rejected" : kind;
+      item.innerHTML = `<time>${timestamp()}</time><span class="event-type">${label}</span><span>${message}</span>`;
+      elements.log.prepend(item);
+      while (elements.log.children.length > 18) elements.log.lastElementChild.remove();
+    }
+
+    function safetyReady() {
+      return elements.guard.checked && elements.drive.checked;
+    }
+
+    function setStatus(text, mode = "ready") {
+      elements.statusText.textContent = text;
+      elements.statusPill.dataset.state = mode;
+      elements.robotState.textContent = mode === "moving" ? "Moving" : mode === "blocked" ? "Stopped" : "Idle";
+    }
+
+    function setControlsDisabled(disabled) {
+      elements.poseButtons.forEach(button => button.disabled = disabled);
+      elements.moveLift.disabled = disabled;
+      elements.runWorkflow.disabled = disabled;
+    }
+
+    function updateSafetyDisplay() {
+      const ready = safetyReady();
+      elements.safetyValue.textContent = ready ? "Ready" : "Blocked";
+      elements.safetyValue.style.color = ready ? "var(--accent-dark)" : "var(--danger)";
+      if (!ready && state.moving) stopMotion("Safety interlock opened");
+    }
+
+    function pointFrom(origin, length, angleDegrees) {
+      const angle = angleDegrees * Math.PI / 180;
+      return { x: origin.x + Math.cos(angle) * length, y: origin.y - Math.sin(angle) * length };
+    }
+
+    function setLine(line, start, end) {
+      line.setAttribute("x1", start.x);
+      line.setAttribute("y1", start.y);
+      line.setAttribute("x2", end.x);
+      line.setAttribute("y2", end.y);
+    }
+
+    function setCircle(circle, point) {
+      circle.setAttribute("cx", point.x);
+      circle.setAttribute("cy", point.y);
+    }
+
+    function render() {
+      const base = { x: 120, y: 279 };
+      const shoulderAngle = 78 - state.joints[1];
+      const elbowAngle = shoulderAngle - 70 + state.joints[2] * 0.45;
+      const wristAngle = elbowAngle - 28 + state.joints[3] * 0.2;
+      const p1 = pointFrom(base, 88, shoulderAngle);
+      const p2 = pointFrom(p1, 82, elbowAngle);
+      const p3 = pointFrom(p2, 60, wristAngle);
+      const points = [base, p1, p2];
+      const ends = [p1, p2, p3];
+
+      svgParts.links.forEach((link, index) => {
+        setLine(link.outer, points[index], ends[index]);
+        setLine(link.core, points[index], ends[index]);
+      });
+      svgParts.joints.forEach((joint, index) => {
+        setCircle(joint.outer, points[index]);
+        setCircle(joint.core, points[index]);
+      });
+      svgParts.gripper.setAttribute("transform", `translate(${p3.x - 305} ${p3.y - 205}) rotate(${-wristAngle} ${305} ${205})`);
+
+      const liftY = 273 - state.lift * 0.47;
+      elements.liftPlatform.setAttribute("y", liftY);
+      elements.liftLoad.setAttribute("y", liftY - 24);
+      elements.liftValue.textContent = `${Math.round(state.lift)} mm`;
+    }
+
+    function animate(duration, update, runId) {
+      return new Promise(resolve => {
+        const start = performance.now();
+        function frame(now) {
+          if (runId !== state.runId) return resolve(false);
+          const progress = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          update(eased);
+          render();
+          if (progress < 1) requestAnimationFrame(frame);
+          else resolve(true);
+        }
+        requestAnimationFrame(frame);
+      });
+    }
+
+    async function moveToPose(name, workflowRunId = null) {
+      if (!safetyReady()) {
+        setStatus("Interlock blocked", "blocked");
+        addLog("error", `MoveToPose(${poses[name].label}) blocked by safety state`);
+        return false;
+      }
+
+      const runId = workflowRunId ?? ++state.runId;
+      const target = poses[name];
+      const startJoints = [...state.joints];
+      state.moving = true;
+      setControlsDisabled(true);
+      setStatus(`Moving to ${target.label}`, "moving");
+      addLog("command", `MoveToPose(${target.label}) accepted`);
+
+      const completed = await animate(780, progress => {
+        state.joints = startJoints.map((value, index) => value + (target.joints[index] - value) * progress);
+      }, runId);
+
+      if (!completed) return false;
+      state.pose = name;
+      state.moving = false;
+      elements.poseValue.textContent = target.label;
+      elements.poseButtons.forEach(button => button.classList.toggle("active", button.dataset.pose === name));
+      setStatus("Ready");
+      setControlsDisabled(false);
+      addLog("property", `CurrentPose changed to ${target.label}`);
+      return true;
+    }
+
+    async function moveLift(target, workflowRunId = null) {
+      if (!safetyReady()) {
+        setStatus("Interlock blocked", "blocked");
+        addLog("error", `SetLiftHeight(${target} mm) blocked by safety state`);
+        return false;
+      }
+
+      const runId = workflowRunId ?? ++state.runId;
+      const startLift = state.lift;
+      state.moving = true;
+      setControlsDisabled(true);
+      setStatus(`Moving lift to ${target} mm`, "moving");
+      addLog("command", `SetLiftHeight(${target} mm) accepted`);
+
+      const completed = await animate(650, progress => {
+        state.lift = startLift + (target - startLift) * progress;
+      }, runId);
+
+      if (!completed) return false;
+      state.lift = target;
+      state.moving = false;
+      setStatus("Ready");
+      setControlsDisabled(false);
+      addLog("property", `LiftPosition changed to ${target} mm`);
+      return true;
+    }
+
+    function stopMotion(reason = "Motion stopped by operator") {
+      state.runId += 1;
+      state.moving = false;
+      setControlsDisabled(false);
+      setStatus("Stopped", "blocked");
+      addLog("safety", reason);
+    }
+
+    async function runWorkflow() {
+      if (!safetyReady()) {
+        setStatus("Interlock blocked", "blocked");
+        addLog("error", "RunWorkflow blocked by safety state");
+        return;
+      }
+
+      const runId = ++state.runId;
+      addLog("command", "RunWorkflow(Pick, Lift, Place, Home) accepted");
+      if (!await moveToPose("pick", runId)) return;
+      if (!await moveLift(220, runId)) return;
+      if (!await moveToPose("place", runId)) return;
+      if (!await moveLift(330, runId)) return;
+      if (!await moveToPose("home", runId)) return;
+      addLog("property", "WorkflowState changed to Completed");
+    }
+
+    elements.poseButtons.forEach(button => button.addEventListener("click", () => moveToPose(button.dataset.pose)));
+    elements.liftRange.addEventListener("input", () => elements.liftOutput.textContent = `${elements.liftRange.value} mm`);
+    elements.moveLift.addEventListener("click", () => moveLift(Number(elements.liftRange.value)));
+    elements.runWorkflow.addEventListener("click", runWorkflow);
+    elements.stop.addEventListener("click", () => stopMotion());
+    elements.guard.addEventListener("change", () => {
+      addLog("safety", `GuardClosed changed to ${elements.guard.checked}`);
+      updateSafetyDisplay();
+    });
+    elements.drive.addEventListener("change", () => {
+      addLog("safety", `DriveEnabled changed to ${elements.drive.checked}`);
+      updateSafetyDisplay();
+    });
+    document.querySelector("#clear-log").addEventListener("click", () => {
+      elements.log.replaceChildren();
+      addLog("property", "Activity log cleared");
+    });
+
+    render();
+    updateSafetyDisplay();
+    addLog("property", "EquipmentState is Ready");
+    addLog("property", "Features discovered: RobotControl, LiftControl, SafetyStatus");
+  </script>
+</body>
+</html>
